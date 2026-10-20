@@ -2,7 +2,7 @@
   "name": "workspace-codex-terminals",
   "displayName": "Workspace Dock",
   "description": "See every workspace project, Git branch and sync button in one status bar, and launch parallel Codex terminals on Linux.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "local-tools",
   "engines": {
     "vscode": "^1.95.0"
@@ -28,6 +28,28 @@
     "configuration": {
       "title": "Workspace Dock",
       "properties": {
+        "workspaceCodex.useSharedCodexBackend": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "使用 Codex 共享后台。默认关闭，以 --no-daemon 启动独立后台，使会话写入锁跟随本次 CLI 进程退出而释放。启用共享模式可复用后台资源，但关闭 Bash 后后台可能继续保留会话。"
+        },
+        "workspaceCodex.terminalOrder": {
+          "type": "string",
+          "default": "workspace",
+          "scope": "window",
+          "enum": ["workspace", "nameAscending", "nameDescending", "custom", "lastLaunch"],
+          "enumDescriptions": ["按工作区文件夹顺序创建终端。", "按项目名称自然升序，例如 project-2 在 project-10 前。", "按项目名称自然降序。", "按 Custom Terminal Order 指定的顺序；未列出的项目追加在后。", "沿用当前工作区上次成功启动的顺序；不读取终端拖拽后的排列。"],
+          "description": "终端组的创建顺序。创建后各项目并行激活环境；已有终端不会被移动或关闭。"
+        },
+        "workspaceCodex.customTerminalOrder": {
+          "type": "array",
+          "default": [],
+          "scope": "window",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "自定义顺序：按先后填写工作区文件夹名称，也支持完整路径或文件夹 URI。同名文件夹请使用路径/URI。只在 Terminal Order 为 custom 时生效。"
+        },
         "workspaceCodex.showRepositoryStatus": {
           "type": "boolean",
           "default": true,
@@ -36,6 +58,10 @@
       }
     },
     "commands": [
+      {
+        "command": "workspaceCodex.configureTerminalOrder",
+        "title": "Workspace Dock: 设置终端打开顺序"
+      },
       {
         "command": "workspaceCodex.resumeAll",
         "title": "Codex: 打开工作区终端组"
@@ -79,7 +105,7 @@
     "url": "https://github.com/TutuGiegieYa/workspace-dock/issues"
   },
   "scripts": {
-    "test": "node check-repository-status.cjs && node check-startup.cjs && python3 check-codex-title.py",
+    "test": "node check-repository-status.cjs && node check-terminal-order.cjs && node check-startup.cjs && python3 check-codex-title.py",
     "package": "python3 scripts/package.py"
   }
 }

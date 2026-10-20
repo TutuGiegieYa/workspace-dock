@@ -47,6 +47,6 @@ output.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
     archive.writestr('extension.vsixmanifest', ET.tostring(manifest, encoding='utf-8', xml_declaration=True))
     archive.writestr('[Content_Types].xml', content_types)
-    for filename in ['package.json', 'extension.js', 'repository-status.js', 'codex-title.py', 'README.md', 'LICENSE', 'CHANGELOG.md']:
+    for filename in ['package.json', 'extension.js', 'repository-status.js', 'terminal-order.js', 'codex-title.py', 'README.md', 'LICENSE', 'CHANGELOG.md']:
         archive.write(root / filename, 'extension/' + filename)
 print(output)

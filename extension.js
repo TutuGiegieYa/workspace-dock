@@ -1,9 +1,11 @@
 'use strict';
 const vscode = require('vscode');
+const { orderFolders, creationQueue, configureOrder } = require('./terminal-order');
 const TYPE = 'workspace-codex';
 const MARKER = 'CODEX_WORKSPACE_RESUME_ROOT';
 const PROTOCOL = 'CODEX_WORKSPACE_RESUME_PROTOCOL';
 let pendingRun;
+let workspaceState;
 const failedTerminals = new WeakSet();
 
 function shellQuote(value) {
@@ -11,7 +13,9 @@ function shellQuote(value) {
 }
 
 function codexCommand(folder) {
-  return `python3 ${shellQuote(`${__dirname}/codex-title.py`)} --project ${shellQuote(folder.name)} -- codex resume -c 'tui.terminal_title=["thread-name"]'`;
+  const shared = vscode.workspace.getConfiguration('workspaceCodex').get('useSharedCodexBackend', false);
+  const backend = shared ? '' : ' --no-daemon';
+  return `python3 ${shellQuote(`${__dirname}/codex-title.py`)} --project ${shellQuote(folder.name)} -- codex resume${backend} -c 'tui.terminal_title=["thread-name"]'`;
 }
 
 function ensureNotCancelled(signal) {
@@ -135,7 +139,10 @@ async function startWorkspaceTerminals(signal) {
     throw new Error('请先信任工作区，再启动 Codex。');
   }
   // Read on every invocation: adding/removing a root never needs task edits.
-  const folders = vscode.workspace.workspaceFolders || [];
+  const config = vscode.workspace.getConfiguration('workspaceCodex');
+  const folders = orderFolders(vscode.workspace.workspaceFolders || [],
+    config.get('terminalOrder', 'workspace'), config.get('customTerminalOrder', []),
+    workspaceState?.get('workspaceCodex.lastTerminalOrder', []) || []);
   if (!folders.length) throw new Error('当前工作区没有打开的文件夹。');
   // Debugpy contributes PATH and BUNDLED_DEBUGPY_PATH during activation.
   // Finish that before creating Bash, otherwise the first tab becomes stale.
@@ -146,59 +153,79 @@ async function startWorkspaceTerminals(signal) {
   ensureNotCancelled(signal);
   const python = await getPythonApi();
   ensureNotCancelled(signal);
-  const results = await Promise.allSettled(folders.map(async folder => {
-    ensureNotCancelled(signal);
-    const root = folder.uri.toString();
-    const existing = vscode.window.terminals.find(terminal =>
-      terminal.exitStatus === undefined &&
-      !failedTerminals.has(terminal) &&
-      terminal.creationOptions?.env?.[MARKER] === root &&
-      terminal.creationOptions?.env?.[PROTOCOL] === '4'
-    );
-    if (existing) {
-      return { terminal: existing, reused: true };
-    }
-    const options = {
-      // Empty (not undefined): Python Environments otherwise pins "Python" as
-      // a static terminal name, preventing OSC session titles from appearing.
-      name: '',
-      cwd: folder.uri,
-      shellPath: '/usr/bin/bash',
-      // VS Code injects its Bash integration only for empty/login arguments.
-      // Passing ['-i'] prevents injection, despite Bash being interactive.
-      shellArgs: [],
-      env: { [MARKER]: root, [PROTOCOL]: '4' }
-    };
-    const environment = python ? await waitForEnvironment(python, folder, signal) : undefined;
-    ensureNotCancelled(signal);
-    // The Python API owns activation, avoiding a race with its on-open handler.
-    // It resolves after command-mode activation has completed.
-    const terminal = environment
-      ? await python.createTerminal(environment, options)
-      : vscode.window.createTerminal(options);
-    try {
+  const reserve = creationQueue();
+  const results = await Promise.allSettled(folders.map(folder => {
+    const slot = reserve();
+    return (async () => {
       ensureNotCancelled(signal);
-      terminal.show(true);
-      await waitForShell(terminal, signal);
-      const manager = environment?.envId?.managerId || '';
-      let check = 'true';
-      if (/conda/i.test(manager) && environment.sysPrefix) {
-        check = `test "$CONDA_PREFIX" = ${shellQuote(environment.sysPrefix)}`;
-      } else if (/venv|virtualenv/i.test(manager) && environment.sysPrefix) {
-        check = `test "$VIRTUAL_ENV" = ${shellQuote(environment.sysPrefix)}`;
+      const root = folder.uri.toString();
+      const existing = vscode.window.terminals.find(terminal =>
+        terminal.exitStatus === undefined &&
+        !failedTerminals.has(terminal) &&
+        terminal.creationOptions?.env?.[MARKER] === root &&
+        terminal.creationOptions?.env?.[PROTOCOL] === '4'
+      );
+      if (existing) {
+        return { terminal: existing, reused: true, root };
       }
-      // Wait for this command's actual completion, not a fixed sleep or just PID.
-      await checkEnvironment(terminal, check, signal);
+      const options = {
+        // Empty (not undefined): Python Environments otherwise pins "Python" as
+        // a static terminal name, preventing OSC session titles from appearing.
+        name: '',
+        cwd: folder.uri,
+        shellPath: '/usr/bin/bash',
+        // VS Code injects its Bash integration only for empty/login arguments.
+        // Passing ['-i'] prevents injection, despite Bash being interactive.
+        shellArgs: [],
+        env: { [MARKER]: root, [PROTOCOL]: '4' }
+      };
+      const environment = python ? await waitForEnvironment(python, folder, signal) : undefined;
+      await slot.turn;
       ensureNotCancelled(signal);
-      terminal.shellIntegration.executeCommand(codexCommand(folder));
-    } catch (error) {
-      failedTerminals.add(terminal);
-      throw new Error(`${folder.name}: ${error.message}`);
-    }
-    return { terminal, reused: false };
+      // The Python API owns activation, avoiding a race with its on-open handler.
+      // It resolves after command-mode activation has completed.
+      // Reserve display positions only until VS Code confirms that each tab is
+      // open. Its Python activation can continue while the next tab is created.
+      let opened;
+      opened = vscode.window.onDidOpenTerminal(terminal => {
+        if (terminal.creationOptions?.env?.[MARKER] !== root) return;
+        slot.release();
+        opened?.dispose();
+      });
+      let terminal;
+      try {
+        terminal = environment
+          ? await python.createTerminal(environment, options)
+          : vscode.window.createTerminal(options);
+      } finally { opened.dispose(); slot.release(); }
+      try {
+        ensureNotCancelled(signal);
+        terminal.show(true);
+        await waitForShell(terminal, signal);
+        const manager = environment?.envId?.managerId || '';
+        let check = 'true';
+        if (/conda/i.test(manager) && environment.sysPrefix) {
+          check = `test "$CONDA_PREFIX" = ${shellQuote(environment.sysPrefix)}`;
+        } else if (/venv|virtualenv/i.test(manager) && environment.sysPrefix) {
+          check = `test "$VIRTUAL_ENV" = ${shellQuote(environment.sysPrefix)}`;
+        }
+        // Wait for this command's actual completion, not a fixed sleep or just PID.
+        await checkEnvironment(terminal, check, signal);
+        ensureNotCancelled(signal);
+        terminal.shellIntegration.executeCommand(codexCommand(folder));
+      } catch (error) {
+        failedTerminals.add(terminal);
+        throw new Error(`${folder.name}: ${error.message}`);
+      }
+      return { terminal, reused: false, root };
+    })().finally(slot.release);
   }));
   const successes = results.filter(result => result.status === 'fulfilled').map(result => result.value);
   const errors = results.filter(result => result.status === 'rejected').map(result => result.reason.message);
+  if (successes.length) {
+    try { await workspaceState?.update('workspaceCodex.lastTerminalOrder', successes.map(result => result.root)); }
+    catch { console.warn('Workspace Dock: unable to save terminal launch order.'); }
+  }
   return {
     created: successes.filter(result => !result.reused).length,
     reused: successes.filter(result => result.reused).length,
@@ -255,10 +282,12 @@ function makeTask(definition, scope = vscode.TaskScope.Workspace) {
 }
 
 function activate(context) {
+  workspaceState = context.workspaceState;
   void require('./repository-status').registerRepositoryStatus(context, vscode).catch(error => {
     void vscode.window.showErrorMessage(`工作区仓库状态栏初始化失败：${error.message}`);
   });
   context.subscriptions.push(
+    vscode.commands.registerCommand('workspaceCodex.configureTerminalOrder', () => configureOrder(vscode)),
     vscode.window.registerUriHandler({
       async handleUri(uri) {
         // One fixed action only; external links cannot supply shell commands.

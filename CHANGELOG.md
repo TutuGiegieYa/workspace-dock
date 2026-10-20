@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Configure terminal creation order in Settings: workspace, natural name ascending/descending, custom list, or previous successful launch order.
+- Add an interactive command to save a custom terminal order to the current workspace.
+- Reserve tab positions in order without waiting for previous environment activation to complete.
+- Preserve existing live tabs; document that manual drag order is not available through the stable API.
+- Default new Codex processes to `--no-daemon`, with a setting to opt back into the shared backend, to tie writer-lock lifetime to the CLI process.
+- Document the distinction between closing Bash and releasing sessions held by a shared daemon.
+
 ## 0.2.0
 
 - Show live Codex session names between the Codex prefix and project name in terminal tabs.

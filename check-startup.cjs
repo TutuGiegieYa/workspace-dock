@@ -11,9 +11,12 @@ class EventEmitter {
 }
 const folder = name => ({ name, uri: { toString: () => `file:///work/${name}` } });
 const shell = new EventEmitter(), ended = new EventEmitter(), closed = new EventEmitter();
+const opened = new EventEmitter();
 const selection = new EventEmitter();
 const activations = [], checks = [], errors = [], commands = {};
 const isLaunch = command => command.includes('codex-title.py') && command.includes('codex resume');
+let sharedBackend = false;
+let orderMode = 'workspace', customOrder = [];
 let uriHandler;
 const debuggerReady = deferred();
 let debuggerActive = false;
@@ -23,13 +26,16 @@ const environments = {
   b: { envId: { managerId: 'python:venv' }, sysPrefix: "/work/a quote'/venv" }
 };
 const api = {
-  workspace: { isTrusted: true, workspaceFolders: [folder('a'), folder('b')] },
+  workspace: { isTrusted: true, workspaceFolders: [folder('a'), folder('b')],
+    getConfiguration() { return { get: (key, fallback) => key === 'useSharedCodexBackend' ? sharedBackend
+      : key === 'terminalOrder' ? orderMode : key === 'customTerminalOrder' ? customOrder : fallback }; } },
   window: {
     registerUriHandler(handler) { uriHandler = handler; return { dispose() {} }; },
     terminals: [],
     onDidChangeTerminalShellIntegration: shell.event,
     onDidEndTerminalShellExecution: ended.event,
     onDidCloseTerminal: closed.event,
+    onDidOpenTerminal: opened.event,
     showErrorMessage: async error => errors.push(error),
     createTerminal(options) {
       const terminal = { creationOptions: options, sent: [], show() {}, sendText() { throw new Error('sendText must not be used'); } };
@@ -42,6 +48,7 @@ const api = {
         }
       };
       this.terminals.push(terminal);
+      opened.fire(terminal);
       return terminal;
     }
   },
@@ -77,10 +84,15 @@ const filename = '/tmp/check-workspace-codex.cjs', mod = new Module(filename);
 mod.filename = filename;
 mod.require = id => {
   if (id === './repository-status') return require('./repository-status');
+  if (id === './terminal-order') return require('./terminal-order');
   assert.equal(id, 'vscode'); return api;
 };
 mod._compile(fs.readFileSync(`${__dirname}/extension.js`, 'utf8') + '\nexports.waitForEnvironment = waitForEnvironment;', filename);
-mod.exports.activate({ subscriptions: [] });
+const savedState = new Map();
+mod.exports.activate({ subscriptions: [], workspaceState: {
+  get: (key, fallback) => savedState.get(key) || fallback,
+  update: async (key, value) => savedState.set(key, value)
+} });
 
 (async () => {
   const first = commands['workspaceCodex.resumeAll']();
@@ -104,6 +116,7 @@ mod.exports.activate({ subscriptions: [] });
   await tick();
   assert.ok(isLaunch(activations[0].terminal.sent.at(-1)));
   assert.ok(activations[0].terminal.sent.at(-1).includes('"thread-name"'), 'Unnamed sessions must not fall back to thread IDs');
+  assert.ok(activations[0].terminal.sent.at(-1).includes('--no-daemon'), 'Default CLI must not leave a writer in a shared daemon');
   assert.equal(activations.length, 2);
   assert.deepEqual(activations[1].terminal.sent, []);
   activations[1].ready.resolve();
@@ -113,6 +126,7 @@ mod.exports.activate({ subscriptions: [] });
   ended.fire({ ...checks[1], exitCode: 0 });
   await Promise.all([first, concurrent]);
   assert.equal(api.window.terminals.length, 2);
+  assert.deepEqual(savedState.get('workspaceCodex.lastTerminalOrder'), ['file:///work/a', 'file:///work/b']);
   await commands['workspaceCodex.resumeAll']();
   assert.equal(api.window.terminals.length, 2);
   await uriHandler.handleUri({ path: '/open', query: '', fragment: '' });
@@ -142,6 +156,7 @@ mod.exports.activate({ subscriptions: [] });
   assert.ok(isLaunch(activations[3].terminal.sent.at(-1)));
   // A URI can arrive before the Python extension has discovered saved selections.
   api.workspace.workspaceFolders = [folder('cold-event'), folder('cold-poll')];
+  sharedBackend = true;
   const cold = uriHandler.handleUri({ path: '/open', query: '', fragment: '' });
   await tick();
   assert.equal(activations.length, 4, 'No terminal until its selection is known');
@@ -159,7 +174,33 @@ mod.exports.activate({ subscriptions: [] });
   activations[5].ready.resolve(); await tick();
   ended.fire({ ...checks[5], exitCode: 0 }); await cold;
   assert.ok(isLaunch(activations[5].terminal.sent.at(-1)));
+  assert.ok(!activations[5].terminal.sent.at(-1).includes('--no-daemon'), 'Shared backend remains configurable');
   assert.equal(selection.listeners.size, 0, 'Selection subscriptions must be cleaned up');
+  // Reverse environment discovery relative to the configured display order.
+  api.workspace.workspaceFolders = [folder('order-a'), folder('order-b')];
+  orderMode = 'custom'; customOrder = ['order-b', 'order-a'];
+  const slowFirst = deferred();
+  environments['order-a'] = environments.a;
+  environments['order-b'] = slowFirst.promise;
+  const ordered = commands['workspaceCodex.resumeAll']();
+  await tick();
+  assert.equal(activations.length, 6, 'A fast later project must not take the earlier tab position');
+  slowFirst.resolve(environments.b); await tick();
+  assert.equal(activations.length, 8, 'Both tabs start activation before either completes');
+  assert.equal(activations[6].terminal.creationOptions.cwd.toString(), 'file:///work/order-b');
+  assert.equal(activations[7].terminal.creationOptions.cwd.toString(), 'file:///work/order-a');
+  activations[7].ready.resolve(); await tick();
+  ended.fire({ ...checks[6], exitCode: 0 }); await tick();
+  assert.ok(isLaunch(activations[7].terminal.sent.at(-1)), 'Later project need not wait for earlier activation');
+  assert.deepEqual(activations[6].terminal.sent, []);
+  activations[6].ready.resolve(); await tick();
+  ended.fire({ ...checks[7], exitCode: 0 }); await ordered;
+  assert.deepEqual(savedState.get('workspaceCodex.lastTerminalOrder'), ['file:///work/order-b','file:///work/order-a']);
+  orderMode = 'lastLaunch';
+  await commands['workspaceCodex.resumeAll']();
+  assert.equal(activations.length, 8, 'Reuse leaves existing live tabs in place');
+  assert.equal(opened.listeners.size, 0, 'Creation listeners are cleaned up');
+  console.log('PASS: configured tab order survives reverse discovery; activations stay parallel; last successful order persists; existing tabs are reused.');
   const controller = new AbortController();
   const cancelled = mod.exports.waitForEnvironment({ getEnvironment: async () => undefined,
     onDidChangeEnvironment: selection.event }, folder('never-ready'), controller.signal);
