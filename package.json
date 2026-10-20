@@ -1,0 +1,82 @@
+{
+  "name": "workspace-codex-terminals",
+  "displayName": "Workspace Dock",
+  "description": "See every workspace project, Git branch and sync button in one status bar, and launch parallel Codex terminals on Linux.",
+  "version": "0.1.9",
+  "publisher": "local-tools",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri",
+    "onTaskType:workspace-codex"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Workspace Dock",
+      "properties": {
+        "workspaceCodex.showRepositoryStatus": {
+          "type": "boolean",
+          "default": true,
+          "description": "在底部状态栏平铺显示工作区各文件夹及其 Git 分支。"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "workspaceCodex.resumeAll",
+        "title": "Codex: 打开工作区终端组"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "workspace-codex",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "resumeAll"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "license": "MIT",
+  "keywords": [
+    "multi-root",
+    "workspace",
+    "git",
+    "status bar",
+    "codex",
+    "terminal"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TutuGiegieYa/workspace-dock.git"
+  },
+  "homepage": "https://github.com/TutuGiegieYa/workspace-dock#readme",
+  "bugs": {
+    "url": "https://github.com/TutuGiegieYa/workspace-dock/issues"
+  },
+  "scripts": {
+    "test": "node check-repository-status.cjs && node check-startup.cjs",
+    "package": "python3 scripts/package.py"
+  }
+}
