@@ -10,6 +10,10 @@ function shellQuote(value) {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
+function codexCommand(folder) {
+  return `python3 ${shellQuote(`${__dirname}/codex-title.py`)} --project ${shellQuote(folder.name)} -- codex resume -c 'tui.terminal_title=["thread-name"]'`;
+}
+
 function ensureNotCancelled(signal) {
   if (signal?.aborted) throw new Error('终端组启动已取消。');
 }
@@ -149,19 +153,21 @@ async function startWorkspaceTerminals(signal) {
       terminal.exitStatus === undefined &&
       !failedTerminals.has(terminal) &&
       terminal.creationOptions?.env?.[MARKER] === root &&
-      terminal.creationOptions?.env?.[PROTOCOL] === '3'
+      terminal.creationOptions?.env?.[PROTOCOL] === '4'
     );
     if (existing) {
       return { terminal: existing, reused: true };
     }
     const options = {
-      name: `Codex: ${folder.name}`,
+      // Empty (not undefined): Python Environments otherwise pins "Python" as
+      // a static terminal name, preventing OSC session titles from appearing.
+      name: '',
       cwd: folder.uri,
       shellPath: '/usr/bin/bash',
       // VS Code injects its Bash integration only for empty/login arguments.
       // Passing ['-i'] prevents injection, despite Bash being interactive.
       shellArgs: [],
-      env: { [MARKER]: root, [PROTOCOL]: '3' }
+      env: { [MARKER]: root, [PROTOCOL]: '4' }
     };
     const environment = python ? await waitForEnvironment(python, folder, signal) : undefined;
     ensureNotCancelled(signal);
@@ -184,7 +190,7 @@ async function startWorkspaceTerminals(signal) {
       // Wait for this command's actual completion, not a fixed sleep or just PID.
       await checkEnvironment(terminal, check, signal);
       ensureNotCancelled(signal);
-      terminal.shellIntegration.executeCommand('codex resume');
+      terminal.shellIntegration.executeCommand(codexCommand(folder));
     } catch (error) {
       failedTerminals.add(terminal);
       throw new Error(`${folder.name}: ${error.message}`);

@@ -6,6 +6,7 @@ async function registerRepositoryStatus(context, vscode) {
   if (!extension) return;
   let disposed = false;
   const entries = new Map();
+  const running = new Set();
   const listeners = [];
   const clear = () => {
     for (const entry of entries.values()) {
@@ -43,9 +44,15 @@ async function registerRepositoryStatus(context, vscode) {
       item.command = { command: 'git.checkout', title: '选择分支', arguments: [repository.rootUri] };
       const incoming = head?.behind || 0;
       const outgoing = head?.ahead || 0;
-      entry.sync.text = '$(sync)';
-      entry.sync.tooltip = `同步 ${folder.name}（先拉取，再推送）\n待拉取 ${incoming}，待推送 ${outgoing}`;
-      entry.sync.command = { command: 'git.sync', title: '同步仓库', arguments: [repository.rootUri] };
+      const busy = running.has(repository.rootUri.toString());
+      const publish = !!head?.name && !head.upstream;
+      entry.sync.text = busy ? '$(sync~spin)' : publish ? '$(cloud-upload)' : '$(sync)';
+      if (!busy && (incoming || outgoing)) entry.sync.text += ` ${incoming}↓ ${outgoing}↑`;
+      entry.sync.tooltip = busy ? `${folder.name}：正在执行 Git 操作…`
+        : publish ? `发布 ${folder.name} 的分支 ${branch}`
+        : `同步 ${folder.name}（先拉取，再推送）\n待拉取 ${incoming}，待推送 ${outgoing}`;
+      entry.sync.command = busy || !head?.name ? undefined
+        : { command: 'workspaceCodex.syncRepository', title: '同步仓库', arguments: [repository.rootUri] };
       entry.sync.show();
     }
     item.show();
@@ -74,7 +81,7 @@ async function registerRepositoryStatus(context, vscode) {
         separator.text = '|';
         separator.show();
       }
-      const entry = { item, sync, separator };
+      const entry = { item, sync, separator, folder, repository };
       if (repository) entry.subscription = repository.state.onDidChange(() => render(entry, folder, repository));
       entries.set(folder.uri.toString(), entry);
       render(entry, folder, repository);
@@ -85,6 +92,29 @@ async function registerRepositoryStatus(context, vscode) {
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('workspaceCodex.showRepositoryStatus')) refresh();
     }));
+  listeners.push(vscode.commands.registerCommand('workspaceCodex.syncRepository', async uri => {
+    const repository = git.getRepository(uri);
+    if (!repository || !repository.state.HEAD?.name) return;
+    const key = repository.rootUri.toString();
+    if (running.has(key)) return;
+    const redraw = () => {
+      if (disposed) return;
+      for (const entry of entries.values()) {
+        if (entry.repository?.rootUri.toString() === key) render(entry, entry.folder, entry.repository);
+      }
+    };
+    running.add(key);
+    redraw();
+    try {
+      const command = repository.state.HEAD.upstream ? 'git.sync' : 'git.publish';
+      await vscode.commands.executeCommand(command, repository.rootUri);
+    } catch (error) {
+      await vscode.window.showErrorMessage(`${key}：${error.message}`);
+    } finally {
+      running.delete(key);
+      redraw();
+    }
+  }));
   refresh();
 }
 

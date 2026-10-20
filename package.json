@@ -2,7 +2,7 @@
   "name": "workspace-codex-terminals",
   "displayName": "Workspace Dock",
   "description": "See every workspace project, Git branch and sync button in one status bar, and launch parallel Codex terminals on Linux.",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "publisher": "local-tools",
   "engines": {
     "vscode": "^1.95.0"
@@ -22,6 +22,9 @@
     }
   },
   "contributes": {
+    "configurationDefaults": {
+      "terminal.integrated.tabs.title": "${sequence}"
+    },
     "configuration": {
       "title": "Workspace Dock",
       "properties": {
@@ -76,7 +79,7 @@
     "url": "https://github.com/TutuGiegieYa/workspace-dock/issues"
   },
   "scripts": {
-    "test": "node check-repository-status.cjs && node check-startup.cjs",
+    "test": "node check-repository-status.cjs && node check-startup.cjs && python3 check-codex-title.py",
     "package": "python3 scripts/package.py"
   }
 }

@@ -13,6 +13,7 @@ const folder = name => ({ name, uri: { toString: () => `file:///work/${name}` } 
 const shell = new EventEmitter(), ended = new EventEmitter(), closed = new EventEmitter();
 const selection = new EventEmitter();
 const activations = [], checks = [], errors = [], commands = {};
+const isLaunch = command => command.includes('codex-title.py') && command.includes('codex resume');
 let uriHandler;
 const debuggerReady = deferred();
 let debuggerActive = false;
@@ -36,7 +37,7 @@ const api = {
         executeCommand(command) {
           terminal.sent.push(command);
           const execution = {};
-          if (command !== 'codex resume') checks.push({ terminal, execution, command });
+          if (!isLaunch(command)) checks.push({ terminal, execution, command });
           return execution;
         }
       };
@@ -91,16 +92,18 @@ mod.exports.activate({ subscriptions: [] });
   await tick();
   assert.equal(activations.length, 2, 'Both projects must begin activation before either finishes');
   assert.deepEqual(activations[0].terminal.creationOptions.shellArgs, []);
+  assert.equal(activations[0].terminal.creationOptions.name, '', 'Do not let Python pin a static terminal name');
   assert.deepEqual(activations[0].terminal.sent, []);
   assert.deepEqual(activations[1].terminal.sent, []);
   activations[0].ready.resolve();
   await tick();
   assert.equal(checks.length, 1);
   assert.equal(checks[0].command, 'test "$CONDA_PREFIX" = \'/conda/envs/another-name\'');
-  assert.ok(!activations[0].terminal.sent.includes('codex resume'));
+  assert.ok(!activations[0].terminal.sent.some(isLaunch));
   ended.fire({ ...checks[0], exitCode: 0 });
   await tick();
-  assert.equal(activations[0].terminal.sent.at(-1), 'codex resume');
+  assert.ok(isLaunch(activations[0].terminal.sent.at(-1)));
+  assert.ok(activations[0].terminal.sent.at(-1).includes('"thread-name"'), 'Unnamed sessions must not fall back to thread IDs');
   assert.equal(activations.length, 2);
   assert.deepEqual(activations[1].terminal.sent, []);
   activations[1].ready.resolve();
@@ -129,14 +132,14 @@ mod.exports.activate({ subscriptions: [] });
   await tick(); activations[2].ready.resolve(); await tick();
   ended.fire({ ...checks[2], exitCode: 1 });
   await failing;
-  assert.ok(!activations[2].terminal.sent.includes('codex resume'));
+  assert.ok(!activations[2].terminal.sent.some(isLaunch));
   assert.equal(errors.length, 1);
   // Failed initialization is not incorrectly reused as an already running session.
   const retry = commands['workspaceCodex.resumeAll']();
   await tick(); assert.equal(activations.length, 4);
   activations[3].ready.resolve(); await tick();
   ended.fire({ ...checks[3], exitCode: 0 }); await retry;
-  assert.equal(activations[3].terminal.sent.at(-1), 'codex resume');
+  assert.ok(isLaunch(activations[3].terminal.sent.at(-1)));
   // A URI can arrive before the Python extension has discovered saved selections.
   api.workspace.workspaceFolders = [folder('cold-event'), folder('cold-poll')];
   const cold = uriHandler.handleUri({ path: '/open', query: '', fragment: '' });
@@ -149,13 +152,13 @@ mod.exports.activate({ subscriptions: [] });
   assert.equal(activations.length, 5, 'Ready root starts while another is still discovering');
   activations[4].ready.resolve(); await tick();
   ended.fire({ ...checks[4], exitCode: 0 }); await tick();
-  assert.equal(activations[4].terminal.sent.at(-1), 'codex resume');
+  assert.ok(isLaunch(activations[4].terminal.sent.at(-1)));
   environments['cold-poll'] = environments.b;
   await new Promise(resolve => setTimeout(resolve, 600));
   assert.equal(activations.length, 6, 'Retry discovers a selection even without an event');
   activations[5].ready.resolve(); await tick();
   ended.fire({ ...checks[5], exitCode: 0 }); await cold;
-  assert.equal(activations[5].terminal.sent.at(-1), 'codex resume');
+  assert.ok(isLaunch(activations[5].terminal.sent.at(-1)));
   assert.equal(selection.listeners.size, 0, 'Selection subscriptions must be cleaned up');
   const controller = new AbortController();
   const cancelled = mod.exports.waitForEnvironment({ getEnvironment: async () => undefined,

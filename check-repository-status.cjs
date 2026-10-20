@@ -11,19 +11,25 @@ const opened = new Emitter(), closed = new Emitter(), folders = new Emitter(), c
 const stateChanged = new Emitter();
 const a = folder('a'), b = folder('b');
 const repository = { rootUri: a.uri, state: {
-  HEAD: { name: 'main' }, indexChanges: [], workingTreeChanges: [], untrackedChanges: [], mergeChanges: [],
+  HEAD: { name: 'main', upstream: { name: 'origin/main' } }, indexChanges: [], workingTreeChanges: [], untrackedChanges: [], mergeChanges: [],
   onDidChange: stateChanged.event
 } };
 let enabled = true, known = false;
 const items = [];
+const commands = {}, calls = [], errors = [];
+let operation = Promise.resolve();
 const git = {
   getRepository(uri) { return known && uri.toString() === a.uri.toString() ? repository : null; },
   onDidOpenRepository: opened.event, onDidCloseRepository: closed.event
 };
 const api = {
+  commands: {
+    registerCommand(id, handler) { commands[id] = handler; return { dispose() { delete commands[id]; } }; },
+    executeCommand(id, uri) { calls.push({ id, uri }); return operation; }
+  },
   extensions: { getExtension() { return { isActive: true, exports: { getAPI: () => git } }; } },
   StatusBarAlignment: { Left: 1 },
-  window: { createStatusBarItem(id, alignment, priority) {
+  window: { showErrorMessage: async message => errors.push(message), createStatusBarItem(id, alignment, priority) {
     const item = { id, alignment, priority, visible: false, disposed: false,
       show() { this.visible = true; }, hide() { this.visible = false; }, dispose() { this.disposed = true; } };
     items.push(item); return item;
@@ -46,12 +52,34 @@ const active = () => all().filter(item => item.id.startsWith('workspaceCodex.rep
   assert.deepEqual(active()[0].command.arguments, [a.uri], 'Branch picker is scoped to the clicked repository');
   const sync = all().find(item => item.id === 'workspaceCodex.sync.file:///work/a');
   assert.equal(sync.text, '$(sync)');
-  assert.equal(sync.command.command, 'git.sync');
+  assert.equal(sync.command.command, 'workspaceCodex.syncRepository');
   assert.deepEqual(sync.command.arguments, [a.uri], 'Sync targets only the clicked repository');
   const separators = all().filter(item => item.text === '|');
   assert.equal(separators.length, 1, 'One divider between two projects, no trailing divider');
   assert.ok(active()[0].priority > sync.priority && sync.priority > separators[0].priority
     && separators[0].priority > active()[1].priority, 'Project, sync, divider, next project');
+  repository.state.HEAD.ahead = 2; repository.state.HEAD.behind = 3; stateChanged.fire();
+  assert.equal(sync.text, '$(sync) 3↓ 2↑');
+  let finish;
+  operation = new Promise(resolve => { finish = resolve; });
+  const running = commands['workspaceCodex.syncRepository'](a.uri);
+  assert.equal(sync.text, '$(sync~spin)', 'Spin for the lifetime of the real command promise');
+  assert.equal(sync.command, undefined, 'Disable repeat clicks while busy');
+  await commands['workspaceCodex.syncRepository'](a.uri);
+  assert.equal(calls.length, 1, 'Concurrent clicks never duplicate Git operations');
+  assert.equal(calls[0].id, 'git.sync');
+  assert.equal(calls[0].uri, a.uri);
+  stateChanged.fire(); assert.equal(sync.text, '$(sync~spin)');
+  finish(); await running;
+  assert.equal(sync.text, '$(sync) 3↓ 2↑');
+  repository.state.HEAD.upstream = undefined; stateChanged.fire();
+  assert.ok(sync.text.startsWith('$(cloud-upload)'));
+  operation = Promise.resolve(); await commands['workspaceCodex.syncRepository'](a.uri);
+  assert.equal(calls.at(-1).id, 'git.publish', 'Unpublished branch uses native publish action');
+  operation = Promise.reject(new Error('test network error'));
+  await commands['workspaceCodex.syncRepository'](a.uri);
+  assert.equal(errors.length, 1);
+  assert.ok(!sync.text.includes('~spin'), 'Failure always clears busy state');
   repository.state.HEAD = { name: 'feature/test' };
   repository.state.untrackedChanges = [{}]; stateChanged.fire();
   assert.equal(active()[0].text, '$(repo) a · $(git-branch) feature/test*');
