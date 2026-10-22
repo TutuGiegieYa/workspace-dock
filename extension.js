@@ -13,9 +13,13 @@ function shellQuote(value) {
 }
 
 function codexCommand() {
-  const shared = vscode.workspace.getConfiguration('workspaceCodex').get('useSharedCodexBackend', false);
-  // Let the CLI own its title, including session names and activity animation.
-  return shared ? 'codex resume' : 'codex resume --no-daemon';
+  const config = vscode.workspace.getConfiguration('workspaceCodex');
+  const backend = config.get('useSharedCodexBackend', false) ? '' : ' --no-daemon';
+  // The CLI still owns title updates and animation. In a two-column layout,
+  // VS Code's description supplies the project separately.
+  const title = config.get('sessionOnlyTitle', false)
+    ? ` -c 'tui.terminal_title=["activity","thread-name"]'` : '';
+  return `codex resume${backend}${title}`;
 }
 
 function ensureNotCancelled(signal) {

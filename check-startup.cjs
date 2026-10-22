@@ -14,8 +14,8 @@ const shell = new EventEmitter(), ended = new EventEmitter(), closed = new Event
 const opened = new EventEmitter();
 const selection = new EventEmitter();
 const activations = [], checks = [], errors = [], commands = {};
-const isLaunch = command => command === 'codex resume' || command === 'codex resume --no-daemon';
-let sharedBackend = false;
+const isLaunch = command => /^codex resume(?: --no-daemon)?(?: -c 'tui\.terminal_title=\["activity","thread-name"\]')?$/.test(command);
+let sharedBackend = false, sessionOnlyTitle = false;
 let orderMode = 'workspace', customOrder = [];
 let uriHandler;
 const debuggerReady = deferred();
@@ -28,7 +28,7 @@ const environments = {
 const api = {
   workspace: { isTrusted: true, workspaceFolders: [folder('a'), folder('b')],
     getConfiguration() { return { get: (key, fallback) => key === 'useSharedCodexBackend' ? sharedBackend
-      : key === 'terminalOrder' ? orderMode : key === 'customTerminalOrder' ? customOrder : fallback }; } },
+      : key === 'sessionOnlyTitle' ? sessionOnlyTitle : key === 'terminalOrder' ? orderMode : key === 'customTerminalOrder' ? customOrder : fallback }; } },
   window: {
     registerUriHandler(handler) { uriHandler = handler; return { dispose() {} }; },
     terminals: [],
@@ -176,6 +176,8 @@ mod.exports.activate({ subscriptions: [], workspaceState: {
   assert.ok(isLaunch(activations[5].terminal.sent.at(-1)));
   assert.equal(activations[5].terminal.sent.at(-1), 'codex resume', 'Shared backend keeps the same native CLI title behavior');
   assert.equal(selection.listeners.size, 0, 'Selection subscriptions must be cleaned up');
+  sessionOnlyTitle = true;
+  sharedBackend = false;
   // Reverse environment discovery relative to the configured display order.
   api.workspace.workspaceFolders = [folder('order-a'), folder('order-b')];
   orderMode = 'custom'; customOrder = ['order-b', 'order-a'];
@@ -191,7 +193,7 @@ mod.exports.activate({ subscriptions: [], workspaceState: {
   assert.equal(activations[7].terminal.creationOptions.cwd.toString(), 'file:///work/order-a');
   activations[7].ready.resolve(); await tick();
   ended.fire({ ...checks[6], exitCode: 0 }); await tick();
-  assert.ok(isLaunch(activations[7].terminal.sent.at(-1)), 'Later project need not wait for earlier activation');
+  assert.equal(activations[7].terminal.sent.at(-1), `codex resume --no-daemon -c 'tui.terminal_title=["activity","thread-name"]'`, 'Session-only layout preserves native activity and name components');
   assert.deepEqual(activations[6].terminal.sent, []);
   activations[6].ready.resolve(); await tick();
   ended.fire({ ...checks[7], exitCode: 0 }); await ordered;

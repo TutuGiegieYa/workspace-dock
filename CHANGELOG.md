@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2
+
+- Add an optional session-only native title layout, preserving activity animation and live names while VS Code displays the project separately.
+- Document an opt-in fixed-width CSS layout with ellipsis and reserved blank space, without changing stored session names.
+
 ## 0.3.1
 
 - Launch Codex directly, preserving native session titles, renames and activity animation.

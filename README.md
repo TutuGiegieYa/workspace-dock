@@ -12,7 +12,7 @@
 - 终端按选定顺序创建；各项目环境发现并行进行，标签创建后独立激活环境并启动 Codex，不等待前一项目完成激活或退出。
 - 重复执行会复用已有终端，避免同一项目重复启动。
 - `codex resume` 打开会话选择器，由你选择要继续的会话。
-- 终端标签由 Codex CLI 原生控制：保留会话名称、用户改名及工作时的转圈效果，与手动运行 Codex 一致；插件不添加 `Codex:` 前缀，也不覆盖 CLI 标题配置。
+- 终端标签由 Codex CLI 原生控制：保留会话名称、用户改名及工作时的转圈效果，与手动运行 Codex 一致；插件不添加 `Codex:` 前缀，默认沿用 CLI 标题配置。
 - 未选择会话或新会话尚未命名时，沿用 CLI 自身的显示；标题格式和刷新时机取决于本机 Codex 版本和配置。插件不扫描聊天记录或读取会话数据库。
 
 ### 2. 所有项目的 Git 状态，一栏看全
@@ -110,9 +110,39 @@ code --open-url vscode://local-tools.workspace-codex-terminals/open
 
 扩展默认把 `terminal.integrated.tabs.title` 设为 `${sequence}`，让未固定名称的终端接受程序发出的标题；用户已有的显式设置优先。若你配置过该项，需要自行改为 `${sequence}` 才能显示动态标题。手动重命名、已有固定名称的终端不会被强行改写，新功能用于本版本新创建的终端。
 
-新版本直接执行 `codex resume`（默认附加 `--no-daemon`），不经过标题转接器，也不覆盖 `tui.terminal_title`。CLI 输出的会话名、项目名和活动动画将原样显示；在 Codex 内调整标题后也会直接跟随。具体格式沿用本机 Codex 配置，与同一 Bash 中手动运行相同。
+默认直接执行 `codex resume`（附加 `--no-daemon`），不经过标题转接器，也不覆盖 `tui.terminal_title`。CLI 输出的会话名、项目名和活动动画将原样显示；在 Codex 内调整标题后也会直接跟随。具体格式沿用本机 Codex 配置，与同一 Bash 中手动运行相同。
 
 升级不会改写正在运行的旧终端。请在方便时正常退出旧 Codex、关闭对应终端，重新加载 VS Code 窗口，再创建终端组；旧进程仍使用其启动时的标题转接器。
+
+### 固定宽度的会话名列（可选）
+
+原生终端标题模板不支持固定宽度。可启用 `"workspaceCodex.sessionOnlyTitle": true`，让 CLI 仅输出原生 `activity` 和 `thread-name`，会话命名、改名和转圈仍由 Codex 控制；项目名使用 VS Code 的 `terminal.integrated.tabs.description`（例如 `${cwdFolder}`）单独显示。该选项不修改 Codex 全局配置，仅对新启动的终端生效。
+
+如已安装 **Custom UI Style**，可把下面规则合并到其 `custom-ui-style.stylesheet` 设置，按该扩展的 Reload 流程应用。Workspace Dock 不自动安装或注入 CSS。
+
+```json
+{
+  ".integrated-terminal .tabs-container.has-text .tabs-list .terminal-tabs-entry:not(.editable-tab) .monaco-icon-label-container": {
+    "display": "flex !important",
+    "align-items": "baseline !important"
+  },
+  ".integrated-terminal .tabs-container.has-text .tabs-list .terminal-tabs-entry:not(.editable-tab) .monaco-icon-name-container": {
+    "flex": "0 0 12em !important",
+    "width": "12em !important",
+    "overflow": "hidden !important",
+    "text-overflow": "ellipsis !important",
+    "white-space": "nowrap !important"
+  },
+  ".integrated-terminal .tabs-container.has-text .tabs-list .terminal-tabs-entry:not(.editable-tab) .monaco-icon-description-container": {
+    "min-width": "0 !important",
+    "overflow": "hidden !important",
+    "text-overflow": "ellipsis !important",
+    "white-space": "nowrap !important"
+  }
+}
+```
+
+`12em` 约为 12 个汉字的显示宽度；长标题显示省略号，短标题保留空白，右侧项目列对齐。它按实际显示宽度裁切，不改变会话名字。样式作用于终端标签列表，也会影响手动创建的终端；列表过窄时项目列仍可能被裁切。内部 CSS 选择器可能随 VS Code 更新变化，需重新验证。
 
 ### Git 状态栏
 

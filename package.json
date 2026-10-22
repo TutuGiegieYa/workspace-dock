@@ -2,7 +2,7 @@
   "name": "workspace-codex-terminals",
   "displayName": "Workspace Dock",
   "description": "See every workspace project, Git branch and sync button in one status bar, and launch parallel Codex terminals on Linux.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "local-tools",
   "engines": {
     "vscode": "^1.95.0"
@@ -68,6 +68,12 @@
           "type": "boolean",
           "default": true,
           "description": "在底部状态栏平铺显示工作区各文件夹及其 Git 分支。"
+        },
+        "workspaceCodex.sessionOnlyTitle": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "终端标题仅显示 Codex 原生会话名和活动状态；项目名由 VS Code 的标签描述单独显示。适合搭配固定宽度样式。关闭时沿用 CLI 的完整标题配置。仅影响新启动的终端。"
         }
       }
     },
