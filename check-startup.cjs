@@ -14,7 +14,7 @@ const shell = new EventEmitter(), ended = new EventEmitter(), closed = new Event
 const opened = new EventEmitter();
 const selection = new EventEmitter();
 const activations = [], checks = [], errors = [], commands = {};
-const isLaunch = command => command.includes('codex-title.py') && command.includes('codex resume');
+const isLaunch = command => command === 'codex resume' || command === 'codex resume --no-daemon';
 let sharedBackend = false;
 let orderMode = 'workspace', customOrder = [];
 let uriHandler;
@@ -115,7 +115,7 @@ mod.exports.activate({ subscriptions: [], workspaceState: {
   ended.fire({ ...checks[0], exitCode: 0 });
   await tick();
   assert.ok(isLaunch(activations[0].terminal.sent.at(-1)));
-  assert.ok(activations[0].terminal.sent.at(-1).includes('"thread-name"'), 'Unnamed sessions must not fall back to thread IDs');
+  assert.equal(activations[0].terminal.sent.at(-1), 'codex resume --no-daemon', 'Keep native CLI title behavior without a proxy or title override');
   assert.ok(activations[0].terminal.sent.at(-1).includes('--no-daemon'), 'Default CLI must not leave a writer in a shared daemon');
   assert.equal(activations.length, 2);
   assert.deepEqual(activations[1].terminal.sent, []);
@@ -174,7 +174,7 @@ mod.exports.activate({ subscriptions: [], workspaceState: {
   activations[5].ready.resolve(); await tick();
   ended.fire({ ...checks[5], exitCode: 0 }); await cold;
   assert.ok(isLaunch(activations[5].terminal.sent.at(-1)));
-  assert.ok(!activations[5].terminal.sent.at(-1).includes('--no-daemon'), 'Shared backend remains configurable');
+  assert.equal(activations[5].terminal.sent.at(-1), 'codex resume', 'Shared backend keeps the same native CLI title behavior');
   assert.equal(selection.listeners.size, 0, 'Selection subscriptions must be cleaned up');
   // Reverse environment discovery relative to the configured display order.
   api.workspace.workspaceFolders = [folder('order-a'), folder('order-b')];

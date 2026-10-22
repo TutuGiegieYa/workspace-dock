@@ -12,10 +12,10 @@ function shellQuote(value) {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
-function codexCommand(folder) {
+function codexCommand() {
   const shared = vscode.workspace.getConfiguration('workspaceCodex').get('useSharedCodexBackend', false);
-  const backend = shared ? '' : ' --no-daemon';
-  return `python3 ${shellQuote(`${__dirname}/codex-title.py`)} --project ${shellQuote(folder.name)} -- codex resume${backend} -c 'tui.terminal_title=["thread-name"]'`;
+  // Let the CLI own its title, including session names and activity animation.
+  return shared ? 'codex resume' : 'codex resume --no-daemon';
 }
 
 function ensureNotCancelled(signal) {
@@ -212,7 +212,7 @@ async function startWorkspaceTerminals(signal) {
         // Wait for this command's actual completion, not a fixed sleep or just PID.
         await checkEnvironment(terminal, check, signal);
         ensureNotCancelled(signal);
-        terminal.shellIntegration.executeCommand(codexCommand(folder));
+        terminal.shellIntegration.executeCommand(codexCommand());
       } catch (error) {
         failedTerminals.add(terminal);
         throw new Error(`${folder.name}: ${error.message}`);

@@ -12,8 +12,8 @@
 - 终端按选定顺序创建；各项目环境发现并行进行，标签创建后独立激活环境并启动 Codex，不等待前一项目完成激活或退出。
 - 重复执行会复用已有终端，避免同一项目重复启动。
 - `codex resume` 打开会话选择器，由你选择要继续的会话。
-- 终端标签显示 `Codex: 会话名称: 项目名`：进入选择器或新会话尚未命名时显示 `未选择会话`，首轮对话生成名称后自动更新，用户改名、切换会话或清空名称时继续跟随更新。
-- 名称直接来自 Codex CLI 的 `thread-name` 终端标题输出，不扫描聊天记录、不读取会话数据库，也不根据“最近一次会话”猜测。标题长短及刷新时机以 CLI 实际输出为准。
+- 终端标签由 Codex CLI 原生控制：保留会话名称、用户改名及工作时的转圈效果，与手动运行 Codex 一致；插件不添加 `Codex:` 前缀，也不覆盖 CLI 标题配置。
+- 未选择会话或新会话尚未命名时，沿用 CLI 自身的显示；标题格式和刷新时机取决于本机 Codex 版本和配置。插件不扫描聊天记录或读取会话数据库。
 
 ### 2. 所有项目的 Git 状态，一栏看全
 
@@ -39,7 +39,7 @@ project-api · main*  ⟳  |  project-web · feature/ui  ⟳  |  project-tools �
 2. 在 VS Code 扩展面板点击右上角 **… → 从 VSIX 安装**。
 3. 安装后按提示重新加载窗口。
 
-Git 状态栏使用 VS Code 自带的 Git 扩展，无需 Codex 账号。终端组功能需要本机 Linux Bash、Python 3 和已登录、可在 Bash 中运行的 Codex CLI。动态会话标题针对 CLI 0.163.0 验证，需要 CLI 支持 `tui.terminal_title` 的 `thread-name` 条目。
+Git 状态栏使用 VS Code 自带的 Git 扩展，无需 Codex 账号。终端组功能需要本机 Linux Bash 和已登录、可在 Bash 中运行的 Codex CLI。标题使用 CLI 原生输出。
 
 如果启用了 Microsoft Python 扩展，还需要启用 **Python Environments**（`ms-python.vscode-python-envs`），并为每个文件夹选择解释器。环境激活及检查完成后才会启动 Codex，初始化失败不会继续执行。
 
@@ -110,16 +110,9 @@ code --open-url vscode://local-tools.workspace-codex-terminals/open
 
 扩展默认把 `terminal.integrated.tabs.title` 设为 `${sequence}`，让未固定名称的终端接受程序发出的标题；用户已有的显式设置优先。若你配置过该项，需要自行改为 `${sequence}` 才能显示动态标题。手动重命名、已有固定名称的终端不会被强行改写，新功能用于本版本新创建的终端。
 
-```text
-选择器 / 新会话无名称 → Codex: 未选择会话: project-api
-首轮自动命名       → Codex: 修复登录问题: project-api
-用户修改名称       → Codex: 登录流程重构: project-api
-Codex 退出         → 回到 Bash，标签随后可由 Bash 提示符更新
-```
+新版本直接执行 `codex resume`（默认附加 `--no-daemon`），不经过标题转接器，也不覆盖 `tui.terminal_title`。CLI 输出的会话名、项目名和活动动画将原样显示；在 Codex 内调整标题后也会直接跟随。具体格式沿用本机 Codex 配置，与同一 Bash 中手动运行相同。
 
-标题转接器以标准库 PTY 保持交互输入、窗口缩放和退出状态，只格式化 OSC 0/2 标题序列；不保存输出，也不读取认证文件。该次启动通过命令行覆盖 CLI 标题条目，不修改用户的 Codex 全局配置。启动后请保留 `thread-name` 标题条目；若在 CLI 内用 `/title` 换成其他条目，标签也会反映那些输出。
-
-相关配置见 [Codex 官方配置参考](https://developers.openai.com/codex/config-reference/)。
+升级不会改写正在运行的旧终端。请在方便时正常退出旧 Codex、关闭对应终端，重新加载 VS Code 窗口，再创建终端组；旧进程仍使用其启动时的标题转接器。
 
 ### Git 状态栏
 
@@ -152,7 +145,7 @@ Git 同步由 VS Code 自带 Git 功能执行，Codex 由用户本机 CLI 执行
 
 ## 开发和打包
 
-需要 Node.js（运行测试）和 Python 3（标题转接与打包），无第三方库依赖。
+需要 Node.js（运行测试）和 Python 3（仅打包时需要），无第三方库依赖。
 
 ```bash
 npm test
@@ -163,7 +156,7 @@ npm run package
 
 GitHub Actions 会对提交和 PR 运行检查；维护者推送与 `package.json` 版本一致的 `v*` 标签后，检查通过才会创建 Release 并上传 VSIX。发布使用该仓库的临时 `GITHUB_TOKEN`，无需在源码或仓库 Secrets 中保存个人访问令牌。
 
-测试覆盖工作区增减、分支和改动状态更新、仓库按钮指向、同步过程及失败清理、并行初始化、环境就绪等待、冷启动、重复调用和取消清理。标题测试使用真实 PTY 和模拟 CLI 验证分段 Unicode 标题、命名/改名/清空、输入、窗口缩放、退出码和终端模式恢复。测试不会启动真实 Codex 会话或同步远程仓库；界面表现仍应在实际 VS Code 中验证。
+测试覆盖工作区增减、分支和改动状态更新、仓库按钮指向、同步过程及失败清理、并行初始化、环境就绪等待、冷启动、重复调用和取消清理。启动测试同时验证直接执行原生 CLI、不附加标题覆盖，并保留独立/共享后台选项。测试不会启动真实 Codex 会话或同步远程仓库；界面表现仍应在实际 VS Code 中验证。
 
 ## License
 

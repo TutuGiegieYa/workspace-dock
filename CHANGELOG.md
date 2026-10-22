@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Launch Codex directly, preserving native session titles, renames and activity animation.
+- Remove the fixed `Codex:` prefix, title override and Python PTY title proxy.
+- Preserve terminal ordering, environment readiness checks and configurable backend lifetime.
+- Document native titles and the need to recreate old terminals after upgrading.
+
 ## 0.3.0
 
 - Configure terminal creation order in Settings: workspace, natural name ascending/descending, custom list, or previous successful launch order.
