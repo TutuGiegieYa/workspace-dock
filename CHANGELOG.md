@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4
+
+- Use the full available width of the Workspace Dock panel and wrap projects only when the row is full.
+- Update the settings description and status-bar tooltip to match the full-width layout.
+
 ## 0.3.3
 
 - Show all workspace projects in a bottom Workspace Dock panel: the project area occupies the left two-thirds and wraps onto additional rows.

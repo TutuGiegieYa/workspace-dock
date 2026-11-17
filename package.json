@@ -2,7 +2,7 @@
   "name": "workspace-codex-terminals",
   "displayName": "Workspace Dock",
   "description": "See workspace projects, Git branches and sync actions in a wrapping bottom panel, and launch parallel Codex terminals on Linux.",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "publisher": "local-tools",
   "engines": {
     "vscode": "^1.95.0"
@@ -75,7 +75,7 @@
           "default": "panel",
           "scope": "window",
           "enumDescriptions": [
-            "使用底部 Workspace Dock 面板，项目占左侧 2/3 并自动换行；状态栏仅保留一个入口。",
+            "使用底部 Workspace Dock 面板，项目占满可用宽度，排满后自动换行；状态栏仅保留一个入口。",
             "使用旧版单行状态栏；项目较多时可能超出可用宽度。"
           ],
           "description": "工作区 Git 状态的显示位置。"
