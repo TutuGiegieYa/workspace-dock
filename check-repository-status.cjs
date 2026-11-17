@@ -29,13 +29,14 @@ const api = {
   },
   extensions: { getExtension() { return { isActive: true, exports: { getAPI: () => git } }; } },
   StatusBarAlignment: { Left: 1 },
-  window: { showErrorMessage: async message => errors.push(message), createStatusBarItem(id, alignment, priority) {
+  window: { registerWebviewViewProvider() { return { dispose() {} }; },
+    showErrorMessage: async message => errors.push(message), createStatusBarItem(id, alignment, priority) {
     const item = { id, alignment, priority, visible: false, disposed: false,
       show() { this.visible = true; }, hide() { this.visible = false; }, dispose() { this.disposed = true; } };
     items.push(item); return item;
   } },
   workspace: {
-    workspaceFolders: [a,b], getConfiguration() { return { get: () => enabled }; },
+    workspaceFolders: [a,b], getConfiguration() { return { get: key => key === 'showRepositoryStatus' ? enabled : 'statusBar' }; },
     onDidChangeWorkspaceFolders: folders.event, onDidChangeConfiguration: config.event
   }
 };

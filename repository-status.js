@@ -1,21 +1,31 @@
 'use strict';
+const { registerRepositoryPanel } = require('./repository-panel');
 
 // Reuse VS Code's Git model: no extra git processes, file watchers or polling.
 async function registerRepositoryStatus(context, vscode) {
   const extension = vscode.extensions.getExtension('vscode.git');
-  if (!extension) return;
+  if (!extension) {
+    const panel = registerRepositoryPanel(context, vscode, () => {});
+    panel.update({ enabled: true, repositories: [], message: '请启用 VS Code 内置 Git 扩展以显示仓库状态。' });
+    context.subscriptions.push(vscode.commands.registerCommand('workspaceCodex.openRepositoryPanel', () =>
+      vscode.commands.executeCommand('workspaceCodex.repositories.focus')));
+    return;
+  }
   let disposed = false;
   const entries = new Map();
   const running = new Set();
   const listeners = [];
+  let summary;
   const clear = () => {
     for (const entry of entries.values()) {
       entry.subscription?.dispose();
-      entry.item.dispose();
-      entry.sync.dispose();
+      entry.item?.dispose();
+      entry.sync?.dispose();
       entry.separator?.dispose();
     }
     entries.clear();
+    summary?.dispose();
+    summary = undefined;
   };
   context.subscriptions.push({ dispose() {
     disposed = true;
@@ -25,8 +35,37 @@ async function registerRepositoryStatus(context, vscode) {
   const exports = extension.isActive ? extension.exports : await extension.activate();
   if (disposed) return;
   const git = exports.getAPI(1);
+  const panel = registerRepositoryPanel(context, vscode, async (action, folderUri) => {
+    if (disposed || !vscode.workspace.getConfiguration('workspaceCodex').get('showRepositoryStatus', true)) return;
+    const folder = vscode.workspace.workspaceFolders?.find(folder => folder.uri.toString() === folderUri);
+    const repository = folder && git.getRepository(folder.uri);
+    if (!repository) return;
+    if (action === 'checkout') await vscode.commands.executeCommand('git.checkout', repository.rootUri);
+    else if (action === 'sync') await vscode.commands.executeCommand('workspaceCodex.syncRepository', repository.rootUri);
+  });
+  const updatePanel = () => {
+    const enabled = vscode.workspace.getConfiguration('workspaceCodex').get('showRepositoryStatus', true);
+    const repositories = enabled ? (vscode.workspace.workspaceFolders || []).map(folder => {
+      const repository = git.getRepository(folder.uri);
+      const state = repository?.state;
+      const head = state?.HEAD;
+      return {
+        folder: folder.uri.toString(), name: folder.name, path: folder.uri.fsPath,
+        hasRepository: !!repository,
+        branch: head?.name || head?.commit?.slice(0, 7) || '无分支',
+        dirty: !!state && [state.indexChanges, state.workingTreeChanges, state.untrackedChanges, state.mergeChanges]
+          .some(changes => changes?.length > 0),
+        ahead: head?.ahead || 0, behind: head?.behind || 0,
+        busy: !!repository && running.has(repository.rootUri.toString()),
+        publish: !!head?.name && !head.upstream, canSync: !!head?.name
+      };
+    }) : [];
+    panel.update({ enabled, repositories, message: !enabled ? '工作区 Git 状态已在设置中关闭。'
+      : !repositories.length ? '打开一个文件夹或多文件夹工作区后，这里会显示项目。' : '' });
+  };
   const render = (entry, folder, repository) => {
     const item = entry.item;
+    if (!item) return;
     if (!repository) {
       item.text = `$(folder) ${folder.name}`;
       item.tooltip = `${folder.uri.fsPath}\n未识别到 Git 仓库`;
@@ -60,8 +99,27 @@ async function registerRepositoryStatus(context, vscode) {
   const refresh = () => {
     if (disposed) return;
     clear();
-    if (!vscode.workspace.getConfiguration('workspaceCodex').get('showRepositoryStatus', true)) return;
+    const config = vscode.workspace.getConfiguration('workspaceCodex');
+    updatePanel();
+    if (!config.get('showRepositoryStatus', true)) return;
     const folders = vscode.workspace.workspaceFolders || [];
+    if (config.get('repositoryStatusLocation', 'panel') !== 'statusBar') {
+      for (const folder of folders) {
+        const repository = git.getRepository(folder.uri);
+        const entry = { folder, repository };
+        if (repository) entry.subscription = repository.state.onDidChange(updatePanel);
+        entries.set(folder.uri.toString(), entry);
+      }
+      if (folders.length) {
+        summary = vscode.window.createStatusBarItem('workspaceCodex.openRepositories', vscode.StatusBarAlignment.Left, 9999);
+        summary.name = '打开 Workspace Dock';
+        summary.text = `$(repo) 工作区 ${folders.length}`;
+        summary.tooltip = '打开 Workspace Dock：项目区占面板左侧 2/3，超出后自动换行';
+        summary.command = 'workspaceCodex.openRepositoryPanel';
+        summary.show();
+      }
+      return;
+    }
     for (const [index, folder] of folders.entries()) {
       const repository = git.getRepository(folder.uri);
       const item = vscode.window.createStatusBarItem(
@@ -82,7 +140,10 @@ async function registerRepositoryStatus(context, vscode) {
         separator.show();
       }
       const entry = { item, sync, separator, folder, repository };
-      if (repository) entry.subscription = repository.state.onDidChange(() => render(entry, folder, repository));
+      if (repository) entry.subscription = repository.state.onDidChange(() => {
+        render(entry, folder, repository);
+        updatePanel();
+      });
       entries.set(folder.uri.toString(), entry);
       render(entry, folder, repository);
     }
@@ -90,8 +151,11 @@ async function registerRepositoryStatus(context, vscode) {
   listeners.push(git.onDidOpenRepository(refresh), git.onDidCloseRepository(refresh),
     vscode.workspace.onDidChangeWorkspaceFolders(refresh),
     vscode.workspace.onDidChangeConfiguration(event => {
-      if (event.affectsConfiguration('workspaceCodex.showRepositoryStatus')) refresh();
+      if (event.affectsConfiguration('workspaceCodex.showRepositoryStatus')
+        || event.affectsConfiguration('workspaceCodex.repositoryStatusLocation')) refresh();
     }));
+  listeners.push(vscode.commands.registerCommand('workspaceCodex.openRepositoryPanel', () =>
+    vscode.commands.executeCommand('workspaceCodex.repositories.focus')));
   listeners.push(vscode.commands.registerCommand('workspaceCodex.syncRepository', async uri => {
     const repository = git.getRepository(uri);
     if (!repository || !repository.state.HEAD?.name) return;
@@ -99,8 +163,9 @@ async function registerRepositoryStatus(context, vscode) {
     if (running.has(key)) return;
     const redraw = () => {
       if (disposed) return;
+      updatePanel();
       for (const entry of entries.values()) {
-        if (entry.repository?.rootUri.toString() === key) render(entry, entry.folder, entry.repository);
+        if (entry.item && entry.repository?.rootUri.toString() === key) render(entry, entry.folder, entry.repository);
       }
     };
     running.add(key);

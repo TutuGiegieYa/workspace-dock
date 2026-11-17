@@ -1,6 +1,6 @@
 # Workspace Dock
 
-**为多项目工作区打造的 VS Code 工具：一键启动全部项目的 Codex 终端，在底部一栏看全所有项目的 Git 状态。**
+**为多项目工作区打造的 VS Code 工具：一键启动全部项目的 Codex 终端，在底部自动换行面板中查看所有项目的 Git 状态。**
 
 ## 两个核心功能
 
@@ -15,12 +15,15 @@
 - 终端标签由 Codex CLI 原生控制：保留会话名称、用户改名及工作时的转圈效果，与手动运行 Codex 一致；插件不添加 `Codex:` 前缀，默认沿用 CLI 标题配置。
 - 未选择会话或新会话尚未命名时，沿用 CLI 自身的显示；标题格式和刷新时机取决于本机 Codex 版本和配置。插件不扫描聊天记录或读取会话数据库。
 
-### 2. 所有项目的 Git 状态，一栏看全
+### 2. 所有项目的 Git 状态，自动换行
 
-在 VS Code 底部同时展示工作区内各项目名称、当前分支、未提交改动标记及独立同步按钮，用 `|` 分隔，无需反复切换当前仓库。
+点击状态栏的 **工作区 N**，或运行 **Workspace Dock: 打开项目面板**。底部 **Workspace Dock** 标签中同时展示项目名称、当前分支、未提交改动标记及独立同步按钮。项目区固定占面板内容宽度的左侧 **2/3**，超出一行自动换行，右侧 **1/3** 留空。
+
+面板与“终端”“输出”等共用 VS Code 底部面板区域，可拖动面板边缘调节高度。项目再多也不会在原生状态栏中无限横向展开；长名称在单个项目超出可用宽度时省略，悬停可查看完整名称和路径。
 
 ```text
-project-api · main*  ⟳  |  project-web · feature/ui  ⟳  |  project-tools · main  ⟳
+[ project-api · main*  ⟳ ]  [ project-web · feature/ui  ⟳ ]
+[ project-tools · main  ⟳ ]
 ```
 
 - 项目名称、顺序和分支信息随工作区及 Git 状态变化自动更新。
@@ -146,15 +149,17 @@ code --open-url vscode://local-tools.workspace-codex-terminals/open
 
 使用 Custom UI Style 时，升级 VS Code 前应先通过该扩展恢复原始文件。升级后如果仍保留旧版本的备份，不要直接 Reload 或 Rollback：旧版界面脚本与新版语言资源混用会导致菜单文字错乱。应先用相同版本的官方安装包恢复原文件，并确认备份版本匹配后再应用样式。
 
-### Git 状态栏
+### Git 状态显示
 
-默认显示，无需运行 Codex。可通过以下设置关闭：
+默认使用自动换行面板，无需运行 Codex。原生状态栏只保留一个打开入口；首次安装或升级后点击 **工作区 N** 打开面板，插件不会自动抢占终端焦点。可通过以下设置关闭显示：
 
 ```json
 {
   "workspaceCodex.showRepositoryStatus": false
 }
 ```
+
+若需要恢复旧版单行状态栏，可设置 `"workspaceCodex.repositoryStatusLocation": "statusBar"`；默认值为 `"panel"`。旧模式仍受原生状态栏的单行空间限制，项目多时建议使用默认面板。
 
 同步操作沿用 VS Code 的 Git 配置和确认流程，可能拉取及推送代码；仅点击项目名称不会同步或自动切换分支。
 

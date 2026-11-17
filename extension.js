@@ -288,7 +288,7 @@ function makeTask(definition, scope = vscode.TaskScope.Workspace) {
 function activate(context) {
   workspaceState = context.workspaceState;
   void require('./repository-status').registerRepositoryStatus(context, vscode).catch(error => {
-    void vscode.window.showErrorMessage(`工作区仓库状态栏初始化失败：${error.message}`);
+    void vscode.window.showErrorMessage(`Workspace Dock Git 状态初始化失败：${error.message}`);
   });
   context.subscriptions.push(
     vscode.commands.registerCommand('workspaceCodex.configureTerminalOrder', () => configureOrder(vscode)),
