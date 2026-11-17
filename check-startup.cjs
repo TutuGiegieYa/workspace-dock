@@ -30,6 +30,7 @@ const api = {
     getConfiguration() { return { get: (key, fallback) => key === 'useSharedCodexBackend' ? sharedBackend
       : key === 'sessionOnlyTitle' ? sessionOnlyTitle : key === 'terminalOrder' ? orderMode : key === 'customTerminalOrder' ? customOrder : fallback }; } },
   window: {
+    registerWebviewViewProvider() { return { dispose() {} }; },
     registerUriHandler(handler) { uriHandler = handler; return { dispose() {} }; },
     terminals: [],
     onDidChangeTerminalShellIntegration: shell.event,

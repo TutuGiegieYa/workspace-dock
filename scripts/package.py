@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
-package = json.loads((root / 'package.json').read_text())
+package = json.loads((root / 'package.json').read_text(encoding='utf-8'))
 namespace = 'http://schemas.microsoft.com/developer/vsx-schema/2011'
 ET.register_namespace('', namespace)
 tag = lambda name: '{' + namespace + '}' + name
@@ -37,6 +37,8 @@ content_types = b'''<?xml version="1.0" encoding="utf-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="json" ContentType="application/json"/>
 <Default Extension="js" ContentType="application/javascript"/>
+<Default Extension="css" ContentType="text/css"/>
+<Default Extension="svg" ContentType="image/svg+xml"/>
 <Default Extension="md" ContentType="text/markdown"/>
 <Default Extension="vsixmanifest" ContentType="text/xml"/>
 <Override PartName="/extension/LICENSE" ContentType="text/plain"/>
@@ -46,6 +48,8 @@ output.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
     archive.writestr('extension.vsixmanifest', ET.tostring(manifest, encoding='utf-8', xml_declaration=True))
     archive.writestr('[Content_Types].xml', content_types)
-    for filename in ['package.json', 'extension.js', 'repository-status.js', 'terminal-order.js', 'README.md', 'LICENSE', 'CHANGELOG.md']:
+    for filename in ['package.json', 'extension.js', 'repository-status.js', 'repository-panel.js', 'terminal-order.js',
+                     'media/repository-panel.js', 'media/repository-panel.css', 'media/dock.svg',
+                     'README.md', 'LICENSE', 'CHANGELOG.md']:
         archive.write(root / filename, 'extension/' + filename)
 print(output)

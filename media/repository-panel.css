@@ -1,0 +1,43 @@
+:root { color-scheme: light dark; }
+body {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-panel-background, var(--vscode-editor-background));
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+  box-sizing: border-box;
+}
+.dock { width: 66.666667%; min-width: 0; }
+#repositories { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; min-width: 0; }
+#message { margin: 4px 0; color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; }
+[hidden] { display: none !important; }
+.repository {
+  display: flex;
+  align-items: stretch;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder, transparent));
+  border-radius: 4px;
+  background: var(--vscode-editor-background);
+  box-sizing: border-box;
+}
+button { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); }
+button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -2px; }
+button:disabled { cursor: default; }
+.project {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; min-width: 0; flex: 1 1 auto; text-align: left;
+}
+.name, .branch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.name { flex: 0 1 auto; max-width: 32ch; }
+.branch { flex: 0 1 auto; max-width: 28ch; color: var(--vscode-descriptionForeground); }
+.dirty { flex: 0 0 auto; color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-foreground)); }
+.icon { width: 14px; height: 14px; flex: 0 0 14px; fill: none; stroke: currentColor; stroke-width: 1.4; }
+.sync { display: flex; align-items: center; justify-content: center; gap: 4px; flex: 0 0 auto; padding: 6px 8px; }
+.counts { font-size: 11px; white-space: nowrap; color: var(--vscode-descriptionForeground); }
+.busy { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .busy { animation: none; } }

@@ -1,8 +1,8 @@
 {
   "name": "workspace-codex-terminals",
   "displayName": "Workspace Dock",
-  "description": "See every workspace project, Git branch and sync button in one status bar, and launch parallel Codex terminals on Linux.",
-  "version": "0.3.2",
+  "description": "See workspace projects, Git branches and sync actions in a wrapping bottom panel, and launch parallel Codex terminals on Linux.",
+  "version": "0.3.3",
   "publisher": "local-tools",
   "engines": {
     "vscode": "^1.95.0"
@@ -67,7 +67,18 @@
         "workspaceCodex.showRepositoryStatus": {
           "type": "boolean",
           "default": true,
-          "description": "在底部状态栏平铺显示工作区各文件夹及其 Git 分支。"
+          "description": "显示工作区各文件夹、Git 分支及同步操作。"
+        },
+        "workspaceCodex.repositoryStatusLocation": {
+          "type": "string",
+          "enum": ["panel", "statusBar"],
+          "default": "panel",
+          "scope": "window",
+          "enumDescriptions": [
+            "使用底部 Workspace Dock 面板，项目占左侧 2/3 并自动换行；状态栏仅保留一个入口。",
+            "使用旧版单行状态栏；项目较多时可能超出可用宽度。"
+          ],
+          "description": "工作区 Git 状态的显示位置。"
         },
         "workspaceCodex.sessionOnlyTitle": {
           "type": "boolean",
@@ -79,6 +90,10 @@
     },
     "commands": [
       {
+        "command": "workspaceCodex.openRepositoryPanel",
+        "title": "Workspace Dock: 打开项目面板"
+      },
+      {
         "command": "workspaceCodex.configureTerminalOrder",
         "title": "Workspace Dock: 设置终端打开顺序"
       },
@@ -87,6 +102,12 @@
         "title": "Codex: 打开工作区终端组"
       }
     ],
+    "viewsContainers": {
+      "panel": [{ "id": "workspaceDock", "title": "Workspace Dock", "icon": "media/dock.svg" }]
+    },
+    "views": {
+      "workspaceDock": [{ "id": "workspaceCodex.repositories", "name": "工作区项目", "type": "webview" }]
+    },
     "taskDefinitions": [
       {
         "type": "workspace-codex",
@@ -125,7 +146,7 @@
     "url": "https://github.com/TutuGiegieYa/workspace-dock/issues"
   },
   "scripts": {
-    "test": "node check-repository-status.cjs && node check-terminal-order.cjs && node check-startup.cjs",
+    "test": "node check-repository-status.cjs && node check-repository-panel.cjs && node check-terminal-order.cjs && node check-startup.cjs",
     "package": "python3 scripts/package.py"
   }
 }

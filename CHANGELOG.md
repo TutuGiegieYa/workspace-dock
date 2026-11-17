@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+- Show all workspace projects in a bottom Workspace Dock panel: the project area occupies the left two-thirds and wraps onto additional rows.
+- Replace the default unbounded status-bar row with a compact panel entry; retain the previous single-line layout as an optional setting.
+- Preserve scoped branch selection, sync/publish progress, dirty markers, live updates and full-name tooltips in the panel.
+- Add webview lifecycle and action validation tests, and package the panel's local scripts, styles and icon.
+
 ## 0.3.2
 
 - Add an optional session-only native title layout, preserving activity animation and live names while VS Code displays the project separately.
