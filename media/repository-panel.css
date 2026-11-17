@@ -8,7 +8,7 @@ body {
   font-size: var(--vscode-font-size, 13px);
   box-sizing: border-box;
 }
-.dock { width: 66.666667%; min-width: 0; }
+.dock { width: 100%; min-width: 0; }
 #repositories { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; min-width: 0; }
 #message { margin: 4px 0; color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; }
 [hidden] { display: none !important; }

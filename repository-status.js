@@ -114,7 +114,7 @@ async function registerRepositoryStatus(context, vscode) {
         summary = vscode.window.createStatusBarItem('workspaceCodex.openRepositories', vscode.StatusBarAlignment.Left, 9999);
         summary.name = '打开 Workspace Dock';
         summary.text = `$(repo) 工作区 ${folders.length}`;
-        summary.tooltip = '打开 Workspace Dock：项目区占面板左侧 2/3，超出后自动换行';
+        summary.tooltip = '打开 Workspace Dock：项目区占满面板可用宽度，排满后自动换行';
         summary.command = 'workspaceCodex.openRepositoryPanel';
         summary.show();
       }
